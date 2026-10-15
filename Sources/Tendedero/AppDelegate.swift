@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var clipboardWatcher: ClipboardWatcher!
     private var signalSources: [DispatchSourceSignal] = []
     private var hotKey: HotKey?
+    private let zoom = Zoom()
     private var menuBarSwipe: MenuBarSwipe?
     private var cancellables = Set<AnyCancellable>()
     private var mouseTimer: Timer?
@@ -410,6 +411,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         if !on {
+            zoom.hide()
             pinned = false
             peekUntil = .distantPast
             panel.ignoresMouseEvents = true
@@ -567,6 +569,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         updateMousePassThrough(mouse)
+        updateZoom(mouse)
 
         // The line's zone runs from its lowest point up to the top of the
         // screen, menu bar included, so moving up never hides it.
@@ -587,6 +590,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 setRevealed(false)
             }
         }
+    }
+
+    /// The card under the pointer opens larger below the line. Not while
+    /// dragging, in a card's menu, or while one of our windows is in front,
+    /// like Quick Look.
+    private func updateZoom(_ mouse: NSPoint) {
+        guard Zoom.isEnabled, !GrabView.isDragging, !GrabView.isShowingMenu, NSApp.keyWindow == nil,
+              let screen = panel.screen else {
+            zoom.hide()
+            return
+        }
+        let local = panel.convertPoint(fromScreen: mouse)
+        let flipped = CGPoint(x: local.x, y: panel.frame.height - local.y)
+        let hit = line.hitRects.first { $0.value.contains(flipped) }
+        let item = hit.flatMap { hit in line.items.first { $0.id == hit.key && !$0.falling && !$0.flying } }
+        let card = hit.map {
+            CGRect(x: panel.frame.minX + $0.value.minX, y: panel.frame.maxY - $0.value.maxY,
+                   width: $0.value.width, height: $0.value.height)
+        }
+        zoom.update(item, card: card, on: screen)
     }
 
     /// The panel spans the whole width of the screen, so it only accepts the
@@ -833,6 +856,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         sizeItem.submenu = sizes
         menu.addItem(sizeItem)
+
+        let zoomItem = ClosureMenuItem(L("Zoom on hover")) { [weak self] in
+            Zoom.isEnabled.toggle()
+            if !Zoom.isEnabled { self?.zoom.hide() }
+        }
+        zoomItem.state = Zoom.isEnabled ? .on : .off
+        menu.addItem(zoomItem)
 
         let shortcutItem = NSMenuItem(title: L("Shortcut"), action: nil, keyEquivalent: "")
         let shortcuts = NSMenu()
