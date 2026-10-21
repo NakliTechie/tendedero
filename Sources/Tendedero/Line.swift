@@ -242,7 +242,12 @@ final class Line: ObservableObject {
     /// is the source app's job, as Finder does.
     @discardableResult
     func trash(_ id: UUID, quietly: Bool = false) -> Bool {
-        guard let item = items.first(where: { $0.id == id }) else { return false }
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return false }
+        let item = items[i]
+        // The card falls with its photo, and once the file is in the Trash it
+        // can no longer be read. A photo still on its way, or off screen on a
+        // long line, is decoded now.
+        if revealed, item.thumb == nil { items[i].thumb = makeThumbnail(item.url) }
         do {
             try FileManager.default.trashItem(at: item.url, resultingItemURL: nil)
             log.notice("Trashed \(item.url.lastPathComponent, privacy: .public)")
