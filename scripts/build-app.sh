@@ -1,8 +1,12 @@
 #!/bin/bash
-# Builds Tendedero.app into ./build without needing Xcode.
+# Builds Hanger.app into ./build without needing Xcode.
 # Usage: scripts/build-app.sh [debug|release] [--install]
-# --install also replaces /Applications/Tendedero.app, so Spotlight and the
+# --install also replaces the copy in /Applications, so Spotlight and the
 # Dock open the fresh build rather than an older copy.
+#
+# This fork ships as "Hanger". Only the name people see changes: the bundle
+# ID, the data folder and the source keep "Tendedero", so settings carry over
+# and upstream merges stay clean.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -14,7 +18,8 @@ for arg in "$@"; do
     *) CONFIG="$arg" ;;
   esac
 done
-APP="build/Tendedero.app"
+NAME="Hanger"
+APP="build/$NAME.app"
 VERSION="1.5.0"
 
 # Builds one architecture and prints the binary's path.
@@ -43,7 +48,7 @@ BIN="$OUT/Tendedero"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Tendedero"
+cp "$BIN" "$APP/Contents/MacOS/$NAME"
 
 # Icon
 WORK="$(mktemp -d)"
@@ -70,10 +75,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Tendedero</string>
-  <key>CFBundleDisplayName</key><string>Tendedero</string>
+  <key>CFBundleName</key><string>${NAME}</string>
+  <key>CFBundleDisplayName</key><string>${NAME}</string>
   <key>CFBundleIdentifier</key><string>app.tendedero.Tendedero</string>
-  <key>CFBundleExecutable</key><string>Tendedero</string>
+  <key>CFBundleExecutable</key><string>${NAME}</string>
   <key>CFBundleIconFile</key><string>Tendedero</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
@@ -84,11 +89,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSDesktopFolderUsageDescription</key>
-  <string>Tendedero watches the folder where macOS saves your screenshots so it can hang them on the line.</string>
+  <string>${NAME} watches the folder where macOS saves your screenshots so it can hang them on the line.</string>
   <key>NSDocumentsFolderUsageDescription</key>
-  <string>Tendedero watches the folder you chose so it can hang new images on the line.</string>
+  <string>${NAME} watches the folder you chose so it can hang new images on the line.</string>
   <key>NSDownloadsFolderUsageDescription</key>
-  <string>Tendedero watches the folder you chose so it can hang new images on the line.</string>
+  <string>${NAME} watches the folder you chose so it can hang new images on the line.</string>
 </dict>
 </plist>
 PLIST
@@ -110,14 +115,20 @@ echo "Built $APP"
 # open /Applications rather than the copy in ./build, which shares its
 # bundle ID. Relaunch only if it was running before.
 if [ "$INSTALL" = 1 ]; then
-  DEST="/Applications/Tendedero.app"
+  DEST="/Applications/$NAME.app"
   LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+  running() { [ "$(osascript -e 'application id "app.tendedero.Tendedero" is running')" = true ]; }
   WAS_RUNNING=0
-  if pgrep -x Tendedero >/dev/null; then
+  if running; then
     WAS_RUNNING=1
     osascript -e 'quit app id "app.tendedero.Tendedero"' >/dev/null || true
-    for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -x Tendedero >/dev/null || break; sleep 0.5; done
-    if pgrep -x Tendedero >/dev/null; then echo "Tendedero did not quit; not installing" >&2; exit 1; fi
+    for _ in 1 2 3 4 5 6 7 8 9 10; do running || break; sleep 0.5; done
+    if running; then echo "$NAME did not quit; not installing" >&2; exit 1; fi
+  fi
+  # A copy under the old name shares the bundle ID and would compete with it.
+  if [ "$NAME" != Tendedero ] && [ -d /Applications/Tendedero.app ]; then
+    "$LSREGISTER" -u /Applications/Tendedero.app 2>/dev/null || true
+    rm -rf /Applications/Tendedero.app
   fi
   rm -rf "$DEST"
   ditto "$APP" "$DEST"
