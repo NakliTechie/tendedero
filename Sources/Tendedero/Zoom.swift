@@ -94,7 +94,7 @@ final class Zoom {
         guard room.width > 120, room.height > 120 else { return hide() }
 
         // A photo in its glass frame, as on the line, never past its own size.
-        let photo = item.thumb.size
+        let photo = item.thumbSize
         guard photo.width > 0, photo.height > 0 else { return hide() }
         let inner = CGSize(width: room.width - Frame.inset * 2, height: room.height - Frame.inset * 2)
         let scale = min(inner.width / photo.width, inner.height / photo.height)

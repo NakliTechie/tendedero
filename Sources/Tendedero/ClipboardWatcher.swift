@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 
 /// Hangs images copied to the clipboard, like a screenshot taken with Control
 /// held or an image copied in Preview. Each one is saved as a PNG in
@@ -13,8 +14,10 @@ final class ClipboardWatcher {
     private var timer: Timer?
     private var lastCount = NSPasteboard.general.changeCount
     /// The last image saved. Some apps put the same image on the clipboard
-    /// again; it hangs once, unless it has been taken down since.
-    private var last: (png: Data, url: URL)?
+    /// again; it hangs once, unless it has been taken down since. Only its
+    /// digest is kept: holding the image itself would keep megabytes alive
+    /// for as long as the app runs.
+    private var last: (digest: SHA256.Digest, url: URL)?
 
     private static let enabledKey = "clipboardEnabled"
 
@@ -90,7 +93,8 @@ final class ClipboardWatcher {
     }
 
     private func save(_ png: Data) {
-        if let last, last.png == png, FileManager.default.fileExists(atPath: last.url.path) { return }
+        let digest = SHA256.hash(data: png)
+        if let last, last.digest == digest, FileManager.default.fileExists(atPath: last.url.path) { return }
         let fm = FileManager.default
         var url = Inbox.folder.appendingPathComponent("Clipboard \(Self.stamp()).png")
         var n = 2
@@ -103,7 +107,7 @@ final class ClipboardWatcher {
             try png.write(to: url, options: .atomic)
             // What people copy can be private: only they can read it.
             try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-            last = (png, url)
+            last = (digest, url)
             onImage(url)
         } catch {
             try? fm.removeItem(at: url)
