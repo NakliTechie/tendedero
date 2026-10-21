@@ -118,9 +118,9 @@ else
 fi
 echo "Built $APP"
 
-# Quit the running copy, swap in the new build, and tell Launch Services to
-# open /Applications rather than the copy in ./build, which shares its
-# bundle ID. Relaunch only if it was running before.
+# Quit the running copy and move the new build into /Applications. Moved,
+# not copied: a second copy in ./build shares the bundle ID and shows up in
+# Spotlight as well. Relaunch only if it was running before.
 if [ "$INSTALL" = 1 ]; then
   DEST="/Applications/$NAME.app"
   LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
@@ -137,9 +137,10 @@ if [ "$INSTALL" = 1 ]; then
     "$LSREGISTER" -u /Applications/Tendedero.app 2>/dev/null || true
     rm -rf /Applications/Tendedero.app
   fi
-  rm -rf "$DEST"
-  ditto "$APP" "$DEST"
-  "$LSREGISTER" -u "$APP" 2>/dev/null || true
+  # Builds from before the rename are left in ./build under the old name.
+  for stale in "$APP" build/Tendedero.app; do "$LSREGISTER" -u "$stale" 2>/dev/null || true; done
+  rm -rf "$DEST" build/Tendedero.app
+  mv "$APP" "$DEST"
   "$LSREGISTER" -f "$DEST"
   mdimport "$DEST" 2>/dev/null || true
   echo "Installed $DEST"
