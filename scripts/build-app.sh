@@ -1,10 +1,19 @@
 #!/bin/bash
 # Builds Tendedero.app into ./build without needing Xcode.
-# Usage: scripts/build-app.sh [debug|release]
+# Usage: scripts/build-app.sh [debug|release] [--install]
+# --install also replaces /Applications/Tendedero.app, so Spotlight and the
+# Dock open the fresh build rather than an older copy.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-CONFIG="${1:-release}"
+CONFIG="release"
+INSTALL=0
+for arg in "$@"; do
+  case "$arg" in
+    --install) INSTALL=1 ;;
+    *) CONFIG="$arg" ;;
+  esac
+done
 APP="build/Tendedero.app"
 VERSION="1.5.0"
 
@@ -96,3 +105,25 @@ else
   echo "Signed ad hoc (no Developer ID found)"
 fi
 echo "Built $APP"
+
+# Quit the running copy, swap in the new build, and tell Launch Services to
+# open /Applications rather than the copy in ./build, which shares its
+# bundle ID. Relaunch only if it was running before.
+if [ "$INSTALL" = 1 ]; then
+  DEST="/Applications/Tendedero.app"
+  LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+  WAS_RUNNING=0
+  if pgrep -x Tendedero >/dev/null; then
+    WAS_RUNNING=1
+    osascript -e 'quit app id "app.tendedero.Tendedero"' >/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -x Tendedero >/dev/null || break; sleep 0.5; done
+    if pgrep -x Tendedero >/dev/null; then echo "Tendedero did not quit; not installing" >&2; exit 1; fi
+  fi
+  rm -rf "$DEST"
+  ditto "$APP" "$DEST"
+  "$LSREGISTER" -u "$APP" 2>/dev/null || true
+  "$LSREGISTER" -f "$DEST"
+  mdimport "$DEST" 2>/dev/null || true
+  echo "Installed $DEST"
+  if [ "$WAS_RUNNING" = 1 ]; then open "$DEST"; fi
+fi
