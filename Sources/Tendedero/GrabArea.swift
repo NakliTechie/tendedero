@@ -62,6 +62,9 @@ struct GrabArea: NSViewRepresentable {
                 menu.addItem(ClosureMenuItem(L("Take down")) { line.discard(id) })
                 menu.addItem(ClosureMenuItem(L("Move to Trash")) { line.trash(id) })
             }
+            // The same as the menu bar's, here too because the menu bar icon
+            // can sit out of reach behind a menu bar manager.
+            menu.addItem(ClosureMenuItem(L("Take everything down")) { line.clear() })
             let left = ClosureMenuItem(L("Take down everything to the left")) { line.takeDown(id, toTheLeft: true) }
             left.isEnabled = !line.neighbours(of: id, toTheLeft: true).isEmpty
             menu.addItem(left)
